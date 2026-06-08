@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>熊出没アニメーション（1日20秒・滑らか版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  html, body { height: 100%; margin: 0; }
+  #map { width: 100%; height: calc(100% - 60px); }
+  #controls {
+    height: 60px;
+    padding: 8px;
+    box-sizing: border-box;
+    font-family: system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+</style>
+</head>
+
+<body>
+<div id="map"></div>
+<div id="controls">
+  <button id="play">▶ 再生</button>
+  <button id="pause">⏸ 一時停止</button>
+  <span id="timeLabel"></span>
+</div>
+
+<script>
+// ------------------------------
+// 地図
+// ------------------------------
+var map = L.map('map', {
+    zoom: 13,
+    center: [36.55, 139.87]
+});
+
+L.tileLayer(
+  "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+  { attribution: "地理院タイル" }
+).addTo(map);
+
+// ------------------------------
+// 熊アイコン（確実に表示されるPNG）
+// ------------------------------
+var bearIcon = L.icon({
+    iconUrl: "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F43B.png",
+    iconSize: [45, 45],
+    iconAnchor: [22, 22]
+});
+
+// ------------------------------
+// 時系列データ
+// ------------------------------
+var points = [
+  { time: "2020-06-06T18:30:00", lat: 36.58470, lng: 139.88254 },
+  { time: "2020-06-06T21:10:00", lat: 36.57543, lng: 139.88588 },
+  { time: "2020-06-07T01:14:00", lat: 36.56523, lng: 139.88549 },
+  { time: "2020-06-07T05:08:00", lat: 36.55342, lng: 139.88192 },
+  { time: "2020-06-07T05:15:00", lat: 36.55369, lng: 139.88063 },
+  { time: "2020-06-07T05:30:00", lat: 36.52422, lng: 139.86169 },
+  { time: "2020-06-07T15:58:00", lat: 36.52332, lng: 139.86169 },
+  { time: "2020-06-07T16:40:00", lat: 36.52261, lng: 139.85753 },
+  { time: "2020-06-07T20:30:00", lat: 36.52062, lng: 139.86169 },
+  { time: "2020-06-07T23:50:00", lat: 36.52463, lng: 139.86613 },
+  { time: "2020-06-08T03:20:00", lat: 36.54994, lng: 139.89956 },
+  { time: "2020-06-08T04:25:00", lat: 36.53413, lng: 139.87613 }
+];
+
+// ------------------------------
+// 補間（1分ごと）
+// ------------------------------
+function toDate(t){ return new Date(t); }
+
+var path = [];
+for (var i = 0; i < points.length - 1; i++) {
+    var p1 = points[i];
+    var p2 = points[i+1];
+
+    var t1 = toDate(p1.time);
+    var t2 = toDate(p2.time);
+
+    var dt = (t2 - t1) / 60000; // 分
+
+    for (var m = 0; m < dt; m++) {
+        var r = m / dt;
+        var lat = p1.lat + (p2.lat - p1.lat) * r;
+        var lng = p1.lng + (p2.lng - p1.lng) * r;
+        var t  = new Date(t1.getTime() + m * 60000);
+        path.push({lat: lat, lng: lng, time: t});
+    }
+}
+path.push({lat: points[points.length-1].lat,
+           lng: points[points.length-1].lng,
+           time: toDate(points[points.length-1].time)});
+
+// ------------------------------
+// マーカー
+// ------------------------------
+var marker = L.marker([path[0].lat, path[0].lng], {icon: bearIcon}).addTo(map);
+var timeLabel = document.getElementById("timeLabel");
+
+var idx = 0;
+var timer = null;
+
+// 1日20秒 → 1分あたり約14ms
+var FRAME = 14;
+
+function update() {
+    var p = path[idx];
+    marker.setLatLng([p.lat, p.lng]);
+    timeLabel.textContent = p.time.toLocaleString("ja-JP");
+}
+
+function play() {
+    if (timer) return;
+    timer = setInterval(function(){
+        idx++;
+        if (idx >= path.length) idx = 0;
+        update();
+    }, FRAME);
+}
+
+function pause() {
+    clearInterval(timer);
+    timer = null;
+}
+
+document.getElementById("play").onclick = play;
+document.getElementById("pause").onclick = pause;
+
+update();
+
+</script>
+</body>
+</html>
