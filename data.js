@@ -166,5 +166,13 @@ const bearData = [
     note: "横川東小学校から北西400m付近",
     video: null,
     streetview: null
+  },
+  {
+    time: "2025-06-09 14:30",
+    lat: 36.537025,
+    lng: 139.904048,
+    note: "東簗瀬1丁目",
+    video: null,
+    streetview: null
   }
 ];
