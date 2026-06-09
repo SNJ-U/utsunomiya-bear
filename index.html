@@ -58,6 +58,17 @@
 
 <div id="map"></div>
 
+<!-- ★ 追加：4コマアニメ表示用 -->
+<img id="comicPlayer" style="
+  display:none;
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  width:80%;
+  z-index:9999;
+">
+
 <div id="controls">
   <button id="playBtn">▶ 再生</button>
   <button id="pauseBtn">⏸ 一時停止</button>
@@ -72,14 +83,14 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// --- 熊アイコン（GitHubの安定版） ---
+// --- 熊アイコン ---
 const bearIcon = L.icon({
     iconUrl: "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F43B.png",
     iconSize: [45, 45],
     iconAnchor: [22, 22]
 });
 
-// --- 赤い標準マーカー ---
+// --- 赤マーカー ---
 const redMarker = L.icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
   shadowUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-shadow.png",
@@ -89,7 +100,7 @@ const redMarker = L.icon({
   shadowSize: [41, 41]
 });
 
-// --- リンクあり地点の “星マーカー” ---
+// --- 星マーカー ---
 const starMarker = L.icon({
   iconUrl: "https://raw.githubusercontent.com/snj-u/utsunomiya-bear/main/star.png",
   shadowUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-shadow.png",
@@ -99,7 +110,7 @@ const starMarker = L.icon({
   shadowSize: [41, 41]
 });
 
-// --- 軌跡（Polyline） ---
+// --- 軌跡 ---
 const latlngs = bearData.map(p => [p.lat, p.lng]);
 
 L.polyline(latlngs, {
@@ -131,7 +142,7 @@ function updateLabels() {
 map.on("zoomend", updateLabels);
 updateLabels();
 
-// --- ポップアップ（動画・ストビュー対応） ---
+// --- ポップアップ ---
 bearData.forEach((p, i) => {
   const html = `
     <div class="popup-box">
@@ -142,7 +153,6 @@ bearData.forEach((p, i) => {
     </div>
   `;
 
-  // リンクがある地点だけ特別アイコン
   const icon = (p.video || p.streetview) ? starMarker : redMarker;
 
   L.marker([p.lat, p.lng], { icon })
@@ -160,6 +170,36 @@ const marker = L.marker(latlngs[0], { icon: bearIcon }).addTo(map);
 function updateClock(t) {
   document.getElementById("clock").textContent = t;
 }
+
+// ★ 追加：4コマ画像
+const comicFrames = [
+  "frame1.png",
+  "frame2.png",
+  "frame3.png",
+  "frame4.png"
+];
+
+// ★ 追加：4コマ再生（最後のコマで停止）
+function playComicAnimation(callback) {
+  let index = 0;
+  const img = document.getElementById("comicPlayer");
+  img.style.display = "block";
+
+  const interval = setInterval(() => {
+    img.src = comicFrames[index];
+    index++;
+
+    if (index >= comicFrames.length) {
+      clearInterval(interval);
+
+      // ★ 最後のコマを表示したまま停止（非表示にしない）
+      if (callback) callback();
+    }
+  }, 1500);
+}
+
+// ★ 追加：特別地点（東簗瀬1丁目）
+const specialPoint = { lat: 36.537025, lng: 139.904048 };
 
 function animate() {
   if (paused) return;
@@ -184,16 +224,56 @@ function animate() {
     marker.setLatLng([lat, lng]);
     updateClock(bearData[idx].time);
 
+    // ★ 到達判定
+    if (!window._comicPlayed) {
+      const bearPos = marker.getLatLng();
+      const latDiff = Math.abs(bearPos.lat - specialPoint.lat);
+      const lngDiff = Math.abs(bearPos.lng - specialPoint.lng);
+
+      if (latDiff < 0.0001 && lngDiff < 0.0001) {
+        window._comicPlayed = true;
+
+        paused = true;
+
+        // ★ 特別地点の強調演出 ★
+        // ① ズームイン
+        map.flyTo([specialPoint.lat, specialPoint.lng], 16, { duration: 1.5 });
+
+        // ② パルス（光る円）
+        const pulse = L.circle([specialPoint.lat, specialPoint.lng], {
+  radius: 50,
+  color: "#ff0000",
+  fillColor: "#ff4444",
+  fillOpacity: 0.5
+}).addTo(map);
+
+        setTimeout(() => map.removeLayer(pulse), 3000);
+        // 3秒待ってから4コマ再生
+        setTimeout(() => {
+          playComicAnimation(() => {
+            // ★ 再生後は止めたまま（再開しない）
+          });
+        }, 3000);
+      }
+    }
+
     requestAnimationFrame(animate);
   }
 }
 
+// ▶ 再生ボタン
 document.getElementById("playBtn").onclick = () => {
+  // ★ 4コマを消す
+  document.getElementById("comicPlayer").style.display = "none";
+
+  // ★ 最初から再開
+  window._comicPlayed = false;
   paused = false;
   startTime = Date.now();
   animate();
 };
 
+// ⏸ 一時停止
 document.getElementById("pauseBtn").onclick = () => {
   paused = true;
 };
