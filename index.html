@@ -37,6 +37,18 @@
     border-radius: 3px;
     font-size: 12px;
   }
+
+  .popup-box {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .popup-box a {
+    color: #0066cc;
+    text-decoration: none;
+  }
+  .popup-box a:hover {
+    text-decoration: underline;
+  }
 </style>
 
 <script src="data.js"></script>
@@ -60,6 +72,33 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
+// --- 熊アイコン（GitHubの安定版） ---
+const bearIcon = L.icon({
+    iconUrl: "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F43B.png",
+    iconSize: [45, 45],
+    iconAnchor: [22, 22]
+});
+
+// --- 赤い標準マーカー ---
+const redMarker = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+  shadowUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// --- リンクあり地点の “星マーカー” ---
+const starMarker = L.icon({
+  iconUrl: "https://raw.githubusercontent.com/snj-u/utsunomiya-bear/main/star.png",
+  shadowUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-shadow.png",
+  iconSize: [41, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 // --- 軌跡（Polyline） ---
 const latlngs = bearData.map(p => [p.lat, p.lng]);
 
@@ -69,7 +108,7 @@ L.polyline(latlngs, {
   opacity: 0.8
 }).addTo(map);
 
-// --- 時刻ラベル（ズームで表示切替） ---
+// --- 時刻ラベル ---
 const markers = [];
 
 bearData.forEach((p, i) => {
@@ -92,17 +131,29 @@ function updateLabels() {
 map.on("zoomend", updateLabels);
 updateLabels();
 
-// --- 熊アイコン（黒いシルエット） ---
-const bearIcon = L.icon({
-    iconUrl: "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F43B.png",
-    iconSize: [45, 45],
-    iconAnchor: [22, 22]
+// --- ポップアップ（動画・ストビュー対応） ---
+bearData.forEach((p, i) => {
+  const html = `
+    <div class="popup-box">
+      <strong>${p.time}</strong><br>
+      ${p.note}<br><br>
+      ${p.video ? `<a href="${p.video}" target="_blank">📹 動画を見る</a><br>` : ""}
+      ${p.streetview ? `<a href="${p.streetview}" target="_blank">🛰 ストリートビュー</a>` : ""}
+    </div>
+  `;
+
+  // リンクがある地点だけ特別アイコン
+  const icon = (p.video || p.streetview) ? starMarker : redMarker;
+
+  L.marker([p.lat, p.lng], { icon })
+    .addTo(map)
+    .bindPopup(html);
 });
 
-// --- アニメーション（滑らか補間版） ---
+// --- アニメーション（熊） ---
 let paused = true;
 let startTime = null;
-const totalDuration = 20000; // 1日20秒
+const totalDuration = 20000;
 
 const marker = L.marker(latlngs[0], { icon: bearIcon }).addTo(map);
 
@@ -137,14 +188,12 @@ function animate() {
   }
 }
 
-// --- 再生ボタン ---
 document.getElementById("playBtn").onclick = () => {
   paused = false;
   startTime = Date.now();
   animate();
 };
 
-// --- 一時停止ボタン ---
 document.getElementById("pauseBtn").onclick = () => {
   paused = true;
 };
