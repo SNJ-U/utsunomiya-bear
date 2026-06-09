@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8" />
-<title>熊出没アニメーション（1日20秒・滑らか版）</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>熊出没アニメーション（完全版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -11,131 +11,143 @@
 <style>
   html, body { height: 100%; margin: 0; }
   #map { width: 100%; height: calc(100% - 60px); }
+
   #controls {
     height: 60px;
     padding: 8px;
     box-sizing: border-box;
-    font-family: system-ui, sans-serif;
+    background: #f0f0f0;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    font-family: system-ui, sans-serif;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+  }
+
+  #clock {
+    font-weight: bold;
+    font-size: 16px;
+  }
+
+  .time-label {
+    background: rgba(255,255,255,0.85);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 12px;
   }
 </style>
+
+<script src="data.js"></script>
 </head>
 
 <body>
+
 <div id="map"></div>
+
 <div id="controls">
-  <button id="play">▶ 再生</button>
-  <button id="pause">⏸ 一時停止</button>
-  <span id="timeLabel"></span>
+  <button id="playBtn">▶ 再生</button>
+  <button id="pauseBtn">⏸ 一時停止</button>
+  <span id="clock">--:--</span>
 </div>
 
 <script>
-// ------------------------------
-// 地図
-// ------------------------------
-var map = L.map('map', {
-    zoom: 13,
-    center: [36.55, 139.87]
+// --- 地図の初期化 ---
+const map = L.map('map').setView([36.55, 139.88], 13);
+
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+// --- 軌跡（Polyline） ---
+const latlngs = bearData.map(p => [p.lat, p.lng]);
+
+L.polyline(latlngs, {
+  color: "#ff6600",
+  weight: 4,
+  opacity: 0.8
+}).addTo(map);
+
+// --- 時刻ラベル（ズームで表示切替） ---
+const markers = [];
+
+bearData.forEach((p, i) => {
+  const m = L.marker([p.lat, p.lng])
+    .addTo(map)
+    .bindTooltip(
+      `<div class="time-label">${p.time}</div>`,
+      { permanent: true, direction: "right" }
+    );
+  markers.push(m);
 });
 
-L.tileLayer(
-  "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-  { attribution: "地理院タイル" }
-).addTo(map);
+function updateLabels() {
+  const zoom = map.getZoom();
+  markers.forEach((m, i) => {
+    if (zoom >= 15) m.openTooltip();
+    else m.closeTooltip();
+  });
+}
+map.on("zoomend", updateLabels);
+updateLabels();
 
-// ------------------------------
-// 熊アイコン（確実に表示されるPNG）
-// ------------------------------
-var bearIcon = L.icon({
+// --- 熊アイコン（黒いシルエット） ---
+const bearIcon = L.icon({
     iconUrl: "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F43B.png",
     iconSize: [45, 45],
     iconAnchor: [22, 22]
 });
 
-// ------------------------------
-// 時系列データ
-// ------------------------------
-var points = [
-  { time: "2020-06-06T18:30:00", lat: 36.58470, lng: 139.88254 },
-  { time: "2020-06-06T21:10:00", lat: 36.57543, lng: 139.88588 },
-  { time: "2020-06-07T01:14:00", lat: 36.56523, lng: 139.88549 },
-  { time: "2020-06-07T05:08:00", lat: 36.55342, lng: 139.88192 },
-  { time: "2020-06-07T05:15:00", lat: 36.55369, lng: 139.88063 },
-  { time: "2020-06-07T05:30:00", lat: 36.52422, lng: 139.86169 },
-  { time: "2020-06-07T15:58:00", lat: 36.52332, lng: 139.86169 },
-  { time: "2020-06-07T16:40:00", lat: 36.52261, lng: 139.85753 },
-  { time: "2020-06-07T20:30:00", lat: 36.52062, lng: 139.86169 },
-  { time: "2020-06-07T23:50:00", lat: 36.52463, lng: 139.86613 },
-  { time: "2020-06-08T03:20:00", lat: 36.54994, lng: 139.89956 },
-  { time: "2020-06-08T04:25:00", lat: 36.53413, lng: 139.87613 }
-];
+// --- アニメーション（滑らか補間版） ---
+let paused = true;
+let startTime = null;
+const totalDuration = 20000; // 1日20秒
 
-// ------------------------------
-// 補間（1分ごと）
-// ------------------------------
-function toDate(t){ return new Date(t); }
+const marker = L.marker(latlngs[0], { icon: bearIcon }).addTo(map);
 
-var path = [];
-for (var i = 0; i < points.length - 1; i++) {
-    var p1 = points[i];
-    var p2 = points[i+1];
-
-    var t1 = toDate(p1.time);
-    var t2 = toDate(p2.time);
-
-    var dt = (t2 - t1) / 60000; // 分
-
-    for (var m = 0; m < dt; m++) {
-        var r = m / dt;
-        var lat = p1.lat + (p2.lat - p1.lat) * r;
-        var lng = p1.lng + (p2.lng - p1.lng) * r;
-        var t  = new Date(t1.getTime() + m * 60000);
-        path.push({lat: lat, lng: lng, time: t});
-    }
-}
-path.push({lat: points[points.length-1].lat,
-           lng: points[points.length-1].lng,
-           time: toDate(points[points.length-1].time)});
-
-// ------------------------------
-// マーカー
-// ------------------------------
-var marker = L.marker([path[0].lat, path[0].lng], {icon: bearIcon}).addTo(map);
-var timeLabel = document.getElementById("timeLabel");
-
-var idx = 0;
-var timer = null;
-
-// 1日20秒 → 1分あたり約14ms
-var FRAME = 14;
-
-function update() {
-    var p = path[idx];
-    marker.setLatLng([p.lat, p.lng]);
-    timeLabel.textContent = p.time.toLocaleString("ja-JP");
+function updateClock(t) {
+  document.getElementById("clock").textContent = t;
 }
 
-function play() {
-    if (timer) return;
-    timer = setInterval(function(){
-        idx++;
-        if (idx >= path.length) idx = 0;
-        update();
-    }, FRAME);
+function animate() {
+  if (paused) return;
+
+  const now = Date.now();
+  const elapsed = now - startTime;
+  const t = elapsed / totalDuration;
+
+  const totalPoints = latlngs.length - 1;
+  const pos = t * totalPoints;
+
+  const idx = Math.floor(pos);
+  const frac = pos - idx;
+
+  if (idx < totalPoints) {
+    const [lat1, lng1] = latlngs[idx];
+    const [lat2, lng2] = latlngs[idx + 1];
+
+    const lat = lat1 + (lat2 - lat1) * frac;
+    const lng = lng1 + (lng2 - lng1) * frac;
+
+    marker.setLatLng([lat, lng]);
+    updateClock(bearData[idx].time);
+
+    requestAnimationFrame(animate);
+  }
 }
 
-function pause() {
-    clearInterval(timer);
-    timer = null;
-}
+// --- 再生ボタン ---
+document.getElementById("playBtn").onclick = () => {
+  paused = false;
+  startTime = Date.now();
+  animate();
+};
 
-document.getElementById("play").onclick = play;
-document.getElementById("pause").onclick = pause;
-
-update();
-
+// --- 一時停止ボタン ---
+document.getElementById("pauseBtn").onclick = () => {
+  paused = true;
+};
 </script>
 </body>
 </html>
