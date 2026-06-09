@@ -150,7 +150,7 @@ const bearData = [
     note: "平松本町地内 宇都宮大学峰キャンパスから南西700m付近",
     video: null,
     streetview: null
-  }
+  },
   {
     time: "2025-06-09 13:00",
     lat: 36.540425253662896,
@@ -158,7 +158,7 @@ const bearData = [
     note: "平松本町地内　横川東小学校から北側700m付近",
     video: null,
     streetview: null
-  }
+  },
   {
     time: "2025-06-09 13:35",
     lat: 36.53536751742734,
